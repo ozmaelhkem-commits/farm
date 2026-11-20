@@ -11,10 +11,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Unzip project
+      - name: Find project
         run: |
-          unzip -q farm-apk.zip -d proj
-          ls -la proj
+          echo "Files in repo:"
+          ls -la
+          if [ -f settings.gradle ]; then
+            DIR=.
+            echo "Project files found in repo root"
+          else
+            ZIP=$(find . -maxdepth 3 -iname '*.zip' -not -path './.git/*' | head -n 1)
+            if [ -z "$ZIP" ]; then
+              echo "ERROR: no .zip file in the repository. Upload farm-apk.zip to the repo root."
+              exit 1
+            fi
+            echo "Using zip: $ZIP"
+            mkdir proj
+            unzip -q "$ZIP" -d proj
+            DIR=$(dirname "$(find proj -maxdepth 3 -name settings.gradle | head -n 1)")
+          fi
+          echo "Project dir: $DIR"
+          echo "PROJ_DIR=$DIR" >> "$GITHUB_ENV"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -31,11 +47,11 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build debug APK
-        working-directory: proj
+        working-directory: ${{ env.PROJ_DIR }}
         run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: farm-apk
-          path: proj/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJ_DIR }}/app/build/outputs/apk/debug/*.apk
